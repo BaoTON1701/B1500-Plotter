@@ -1,0 +1,28 @@
+# macOS specific files
+.DS_Store
+
+# Python virtual environment folder
+# This is very important to ignore!
+venv/
+env/
+.venv/
+
+# Python bytecode and cache
+__pycache__/
+*.pyc
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+
+# Flask instance folder
+instance/
+
+# Our application's user-uploaded files
+# This ensures you don't commit user data to your repository
+uploads/
+
+# IDE/Editor specific folders
+.vscode/
+.idea/
