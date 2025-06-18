@@ -18,9 +18,9 @@ app = Flask(__name__)
 # --- rcParams Block with Grid Settings ---
 plt.rcParams.update({
     ## Text and Font Settings
-    "text.usetex": True,
+    "text.usetex": False, # change to true if you have the tex in your computer
     "font.family": "serif",
-    "font.serif": ["Times New Roman"],
+    # "font.serif": ["Times New Roman"], # uncomment to try if it works for you, just to be more fancy
     "axes.labelsize": 25,
     "font.size": 16,
     "legend.fontsize": 16,
@@ -60,7 +60,7 @@ def parse_file(filepath):
         dimension_lines = []
         for i in range(len(lines) - 1):
             line1, line2 = lines[i].strip().lower(), lines[i+1].strip().lower()
-            if 'dimension1' in line1 and 'dimension2' in line2:
+            if 'dimension 1' in line1 and 'dimension 2' in line2:
                 header_row_number = i + 2
                 dimension_lines = [lines[i].strip(), lines[i+1].strip()]
                 break
@@ -81,7 +81,8 @@ def parse_file(filepath):
 
 def plot_segmented_curves(df, x_col, y_col, num_curves, ax=None,
                           curves_to_plot=None, labels=None, 
-                          label_source_col=None, **plot_kwargs):
+                          label_source_col=None, prepend_y_col_to_label=True,
+                          file_display_name=None, num_files_plotting=1, **plot_kwargs):
     if not isinstance(df, pd.DataFrame) or df.empty or x_col not in df or y_col not in df:
         if ax is None: fig, ax = plt.subplots(); return fig, ax
         return ax.get_figure(), ax
@@ -100,36 +101,48 @@ def plot_segmented_curves(df, x_col, y_col, num_curves, ax=None,
         if ax is None: fig, ax = plt.subplots(); return fig, ax
         return ax.get_figure(), ax
     
-    if ax is None:
-        fig, ax = plt.subplots(figsize=(12, 8))
+    if ax is None: fig, ax = plt.subplots(figsize=(12, 8));
+    else: fig = ax.get_figure()
+
+    # If we are using per-curve labels, we plot each one individually to label it.
+    if labels or label_source_col:
+        for segment_idx in plot_indices:
+            start, end = segment_idx * points_per_curve, (segment_idx + 1) * points_per_curve
+            curve_data = df.iloc[start:end]
+
+            # --- New Combined Label Logic ---
+            label_parts = []
+            if prepend_y_col_to_label:
+                label_parts.append(y_col)
+
+            curve_specific_label = None
+            if labels and segment_idx in labels:
+                curve_specific_label = labels[segment_idx]
+            elif label_source_col and label_source_col in curve_data:
+                unique_labels = curve_data[label_source_col].unique()
+                if len(unique_labels) > 0:
+                    curve_specific_label = unique_labels[0]
+            
+            if curve_specific_label:
+                label_parts.append(str(curve_specific_label))
+            
+            if num_files_plotting > 1 and file_display_name:
+                label_parts.append(f"({file_display_name})")
+
+            final_label = " - ".join(label_parts)
+            ax.plot(curve_data[x_col].values, curve_data[y_col].values, label=final_label, **plot_kwargs)
+    # Otherwise, we use the old group-labeling method
     else:
-        fig = ax.get_figure()
-
-    group_label = plot_kwargs.pop('label', None)
-    
-    for i, segment_idx in enumerate(plot_indices):
-        start, end = segment_idx * points_per_curve, (segment_idx + 1) * points_per_curve
-        curve_data = df.iloc[start:end]
+        group_label = f"{y_col} ({file_display_name})" if num_files_plotting > 1 else y_col
+        x_data = df_clean[x_col].values.reshape(num_curves, -1)
+        y_data = df_clean[y_col].values.reshape(num_curves, -1)
+        x_to_plot = x_data[plot_indices, :]
+        y_to_plot = y_data[plot_indices, :]
         
-        label_for_this_curve = None
-        # --- New Labeling Logic ---
-        # Priority 1: Manual per-curve alias (from the text box)
-        if labels and segment_idx in labels:
-            label_for_this_curve = f"{y_col}: {labels[segment_idx]}"
-        # Priority 2: Automatic from data column
-        elif label_source_col and label_source_col in curve_data:
-            unique_labels = curve_data[label_source_col].unique()
-            if len(unique_labels) > 0:
-                label_for_this_curve = f"{y_col}: {unique_labels[0]}"
-        # Priority 3: Fallback to the group label (for file-based comparison) for the first segment
-        elif i == 0:
-            # group_label is already descriptive (e.g., "IC (300K)"), so we don't prepend y_col again.
-            label_for_this_curve = group_label
-
-        ax.plot(curve_data[x_col].values, curve_data[y_col].values, label=label_for_this_curve, **plot_kwargs)
+        lines = ax.plot(x_to_plot.T, y_to_plot.T, **plot_kwargs)
+        lines[0].set_label(group_label)
 
     ax.grid(True)
-    # The title and axis labels are now set outside this function
     return fig, ax
 
 @app.route('/', methods=['GET', 'POST'])
@@ -172,6 +185,10 @@ def job_page(job_id):
         context["headers"] = df_template.columns.str.strip().tolist()
 
         if request.method == 'POST':
+            selected_files_to_plot = request.form.getlist('files_to_plot')
+            if not selected_files_to_plot:
+                raise ValueError("You must select at least one file to include in the plots.")
+
             num_plots = int(request.form.get('num_plots', 0))
             context["num_plots"] = num_plots
             x_col = request.form.get('x_col', '').strip()
@@ -192,6 +209,7 @@ def job_page(job_id):
                     labels_dict = dict(zip(curves_to_plot, curve_labels))
                 elif not curves_to_plot and curve_labels:
                     labels_dict = {i: label for i, label in enumerate(curve_labels)}
+            prepend_y_col = request.form.get('prepend_y_col') == 'on'
 
             for i in range(1, num_plots + 1):
                 numerator = request.form.get(f'numerator_{i}')
@@ -218,6 +236,8 @@ def job_page(job_id):
 
                 for path in plot_paths:
                     for file_idx, filename in enumerate(filenames):
+                        if filename not in selected_files_to_plot: continue
+                        
                         num_curves = request.form.get(f'num_curves_{file_idx}', type=int)
                         if not num_curves: raise ValueError(f"'Total # of Curves' is required for {filename}.")
                         
@@ -234,13 +254,18 @@ def job_page(job_id):
                         df_numeric = df.apply(pd.to_numeric, errors='coerce')
                         if label_col_data is not None: df_numeric[label_source_col] = label_col_data
                         
+                        if scale_col := request.form.get(f'scale_col_{i}', '').strip():
+                            if scale_factor_str := request.form.get(f'scale_factor_{i}'):
+                                if scale_col in df_numeric.columns:
+                                    df_numeric[scale_col] *= float(scale_factor_str)
+                        
                         file_alias = request.form.get(f'file_alias_{file_idx}', '').strip() or os.path.splitext(filename)[0]
-                        group_label = f"{y_col_to_plot} ({file_alias})"
                         
                         plot_segmented_curves(
                             df=df_numeric, x_col=x_col, y_col=y_col_to_plot, num_curves=num_curves, ax=ax,
                             curves_to_plot=curves_to_plot, labels=labels_dict, label_source_col=label_source_col, 
-                            label=group_label, lw=2, linestyle=path['style']
+                            prepend_y_col_to_label=prepend_y_col, file_display_name=file_alias,
+                            num_files_plotting=len(selected_files_to_plot), lw=2, linestyle=path['style']
                         )
                 
                 final_xlabel = str(request.form.get('xlabel', '') or x_col)
@@ -261,7 +286,6 @@ def job_page(job_id):
                 img.seek(0)
                 context["plot_urls"].append(base64.b64encode(img.getvalue()).decode('utf8'))
                 plt.close(fig)
-    
     except Exception as e:
         context["error"] = f"An error occurred: {e}"
 

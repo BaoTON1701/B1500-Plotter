@@ -6,7 +6,7 @@
     <title>Configure Comparative Plots</title>
     <style>
         :root { --panel-gap: 1.5rem; --control-panel-width: 600px; }
-        html, body { height: 100%; margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: #f4f7f6; }
+        html, body { height: 100%; margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; background-color: #f4f7f6; }
         .main-layout { display: flex; height: 100vh; gap: var(--panel-gap); padding: var(--panel-gap); }
         .controls-panel, .output-panel { background-color: #fff; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); overflow-y: auto; padding: 2rem; }
         .controls-panel { flex: 0 0 var(--control-panel-width); }
@@ -40,14 +40,20 @@
             
             {% if error %} <div class="alert alert-danger">{{ error }}</div> {% endif %}
 
-            <div class="info-box">
-                <h4>Uploaded Files</h4>
-                <ul style="padding-left: 20px;">{% for f in filenames %}<li>{{ f }}</li>{% endfor %}</ul>
-                {% if headers %}<h5 style="margin-top: 1rem; margin-bottom: 0.5rem;">Available Data Columns</h5><p style="font-size:0.8em; margin:0; line-height: 1.4;">{{ headers|join(', ') }}</p>{% endif %}
-            </div>
+            <form method="post" onsubmit="document.getElementById('generate-btn').disabled=true; document.getElementById('generate-btn').innerText='Generating...'">
+                <div class="info-box">
+                    <h4>Files to Include in Plots</h4>
+                    {% for filename in filenames %}
+                    <div class="checkbox-group">
+                        <input type="checkbox" name="files_to_plot" value="{{ filename }}" id="file_{{loop.index0}}" checked>
+                        <label for="file_{{loop.index0}}" style="font-weight:normal;">{{ filename }}</label>
+                    </div>
+                    {% endfor %}
+                    {% if headers %}<h5 style="margin-top: 1rem; margin-bottom: 0.5rem;">Available Data Columns</h5>
+                    <p style="font-size:0.8em; margin:0; line-height: 1.4;">{{ headers|join(', ') }}</p>{% endif %}
+                </div>
 
-            {% if num_plots %}
-                <form method="post" onsubmit="document.getElementById('generate-btn').disabled=true; document.getElementById('generate-btn').innerText='Generating...'">
+                {% if num_plots %}
                     <input type="hidden" name="num_plots" value="{{ num_plots }}">
                     
                     <h2>File Settings</h2>
@@ -75,6 +81,7 @@
                     </div>
                     <div class="form-group checkbox-group"><input type="checkbox" id="use_col_as_label" name="use_col_as_label" {% if form_data.get('use_col_as_label') %}checked{% endif %}><label for="use_col_as_label">Auto-generate labels from a data column</label></div>
                     <div class="form-group"><label for="label_source_col">Label Source Column</label><select id="label_source_col" name="label_source_col"><option value="">-- Select Column --</option>{% for h in headers %}<option value="{{h}}" {% if form_data.get('label_source_col') == h %}selected{% endif %}>{{h}}</option>{% endfor %}</select></div>
+                    <div class="form-group checkbox-group"><input type="checkbox" id="prepend_y_col" name="prepend_y_col" {% if form_data.get('prepend_y_col', 'on') %}checked{% endif %}><label for="prepend_y_col">Prepend Y-Column name to legend labels (e.g., "IC: ...")</label></div>
 
                     {% for i in range(1, num_plots + 1) %}
                     <h3>Plot {{ i }} Settings</h3>
@@ -92,6 +99,8 @@
                         <div class="form-group"><label for="ylabel_{{i}}">Y-Axis Label</label><input type="text" id="ylabel_{{i}}" name="ylabel_{{i}}" placeholder="Defaults to Y-columns" value="{{ form_data.get('ylabel_' ~ i, '') }}"></div>
                         <div class="form-group"><label>Y-Axis Options</label><div class="checkbox-group"><input type="checkbox" id="y_log_{{i}}" name="y_log_{{i}}" {% if form_data.get('y_log_' ~ i) %}checked{% endif %}><label for="y_log_{{i}}" style="margin:0;">Log</label></div><div class="checkbox-group" style="margin-top:0.25rem;"><input type="checkbox" id="legend_{{i}}" name="legend_{{i}}" {% if form_data.get('legend_' ~ i, 'on') %}checked{% endif %}><label for="legend_{{i}}" style="margin:0;">Legend</label></div></div>
                         <div class="form-group"><label>Y-Axis Limits</label><div style="display:flex; gap: 0.5rem;"><input type="number" step="any" name="y_min_{{i}}" placeholder="Min" value="{{ form_data.get('y_min_' ~ i, '') }}"><input type="number" step="any" name="y_max_{{i}}" placeholder="Max" value="{{ form_data.get('y_max_' ~ i, '') }}"></div></div>
+                        <div class="form-group"><label for="scale_col_{{i}}">Column to Scale</label><select id="scale_col_{{i}}" name="scale_col_{{i}}"><option value="">-- Select Column --</option>{% for h in headers %}<option value="{{h}}" {% if form_data.get('scale_col_' ~ i) == h %}selected{% endif %}>{{h}}</option>{% endfor %}</select></div>
+                        <div class="form-group"><label for="scale_factor_{{i}}">Scaling Factor</label><input type="number" step="any" id="scale_factor_{{i}}" name="scale_factor_{{i}}" value="{{ form_data.get('scale_factor_' ~ i, '1.0') }}"></div>
                     </div>
                     <div class="calc-grid">
                         <h4 style="grid-column: 1 / -1;">Or, Plot a Calculation</h4>
@@ -101,15 +110,15 @@
                     {% endfor %}
 
                     <div style="text-align: center; margin-top: 2rem;"><button type="submit" id="generate-btn" class="btn btn-success">Generate Plot(s)</button></div>
-                </form>
-
-            {% else %}
-                <form method="get">
-                    <h2>Create Plots</h2>
-                    <div class="form-group"><label for="num_plots">How many separate plots do you want to create?</label><input type="number" id="num_plots" name="num_plots" min="1" max="5" value="1" required></div>
-                    <div style="margin-top: 1rem;"><button type="submit" class="btn">Continue</button></div>
-                </form>
-            {% endif %}
+                
+                {% else %}
+                    <form method="get">
+                        <h2>Create Plots</h2>
+                        <div class="form-group"><label for="num_plots">How many separate plots do you want to create?</label><input type="number" id="num_plots" name="num_plots" min="1" max="5" value="1" required></div>
+                        <div style="margin-top: 1rem;"><button type="submit" class="btn">Continue</button></div>
+                    </form>
+                {% endif %}
+            </form>
         </div>
         <div class="output-panel">
             {% if not plot_urls and not error and num_plots %}<div class="alert alert-info"><h2>Ready to Plot</h2><p>Fill out the configuration on the left and click "Generate Plot(s)".</p></div>{% endif %}
