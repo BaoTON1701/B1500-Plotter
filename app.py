@@ -60,7 +60,7 @@ def parse_file(filepath):
         dimension_lines = []
         for i in range(len(lines) - 1):
             line1, line2 = lines[i].strip().lower(), lines[i+1].strip().lower()
-            if 'dimension 1' in line1 and 'dimension 2' in line2:
+            if 'dimension1' in line1 and 'dimension2' in line2:
                 header_row_number = i + 2
                 dimension_lines = [lines[i].strip(), lines[i+1].strip()]
                 break
@@ -73,7 +73,7 @@ def parse_file(filepath):
                 if 'Setup.Title' in line: specific_settings['Setup Title'] = line.split(',', 1)[1].strip()
                 elif 'RecordTime' in line: specific_settings['Record Time'] = line.split(',', 1)[1].strip()
             if dimension_lines:
-                specific_settings['Dimension 1'], specific_settings['Dimension 2'] = dimension_lines
+                specific_settings['Dimension1'], specific_settings['Dimension2'] = dimension_lines
     except Exception as e:
         error = f"Error reading or parsing file: {e}"
         header_row_number = -1
@@ -81,67 +81,59 @@ def parse_file(filepath):
 
 def plot_segmented_curves(df, x_col, y_col, num_curves, ax=None,
                           curves_to_plot=None, labels=None, 
-                          label_source_col=None, prepend_y_col_to_label=True,
+                          label_source_col=None, prepend_y_col_to_label=True, 
                           file_display_name=None, num_files_plotting=1, **plot_kwargs):
     if not isinstance(df, pd.DataFrame) or df.empty or x_col not in df or y_col not in df:
         if ax is None: fig, ax = plt.subplots(); return fig, ax
         return ax.get_figure(), ax
-    
     df_clean = df.dropna(subset=[x_col, y_col])
     total_points = len(df_clean)
-
     if num_curves <= 0 or total_points == 0 or total_points % num_curves != 0:
         if ax is None: fig, ax = plt.subplots(); return fig, ax
         return ax.get_figure(), ax
-        
     points_per_curve = total_points // num_curves
     plot_indices = curves_to_plot if curves_to_plot is not None else range(num_curves)
-
     if any(i >= num_curves or i < 0 for i in plot_indices):
         if ax is None: fig, ax = plt.subplots(); return fig, ax
         return ax.get_figure(), ax
+    if ax is None:
+        fig, ax = plt.subplots(figsize=(12, 8))
+    else:
+        fig = ax.get_figure()
     
-    if ax is None: fig, ax = plt.subplots(figsize=(12, 8));
-    else: fig = ax.get_figure()
-
-    # If we are using per-curve labels, we plot each one individually to label it.
+    group_label = plot_kwargs.pop('label', None)
+    
+    # If using per-curve labels, plot each curve individually to assign the unique label.
     if labels or label_source_col:
         for segment_idx in plot_indices:
             start, end = segment_idx * points_per_curve, (segment_idx + 1) * points_per_curve
             curve_data = df.iloc[start:end]
-
-            # --- New Combined Label Logic ---
-            label_parts = []
-            if prepend_y_col_to_label:
-                label_parts.append(y_col)
-
-            curve_specific_label = None
+            
+            label_for_this_curve = None
+            base_label = None
             if labels and segment_idx in labels:
-                curve_specific_label = labels[segment_idx]
+                base_label = labels[segment_idx]
             elif label_source_col and label_source_col in curve_data:
                 unique_labels = curve_data[label_source_col].unique()
-                if len(unique_labels) > 0:
-                    curve_specific_label = unique_labels[0]
+                if len(unique_labels) > 0: base_label = unique_labels[0]
             
-            if curve_specific_label:
-                label_parts.append(str(curve_specific_label))
+            if base_label is not None:
+                label_for_this_curve = f"{y_col}: {base_label}" if prepend_y_col_to_label else str(base_label)
+            elif num_files_plotting > 1:
+                 # Fallback for multi-file, per-curve labeling: use a simplified group label
+                 if i == 0: label_for_this_curve = f"{y_col} ({file_display_name})"
             
-            if num_files_plotting > 1 and file_display_name:
-                label_parts.append(f"({file_display_name})")
-
-            final_label = " - ".join(label_parts)
-            ax.plot(curve_data[x_col].values, curve_data[y_col].values, label=final_label, **plot_kwargs)
-    # Otherwise, we use the old group-labeling method
+            ax.plot(curve_data[x_col].values, curve_data[y_col].values, label=label_for_this_curve, **plot_kwargs)
+    # Otherwise, use the much faster vectorized plotting for group labels.
     else:
-        group_label = f"{y_col} ({file_display_name})" if num_files_plotting > 1 else y_col
         x_data = df_clean[x_col].values.reshape(num_curves, -1)
         y_data = df_clean[y_col].values.reshape(num_curves, -1)
         x_to_plot = x_data[plot_indices, :]
         y_to_plot = y_data[plot_indices, :]
-        
         lines = ax.plot(x_to_plot.T, y_to_plot.T, **plot_kwargs)
-        lines[0].set_label(group_label)
-
+        if group_label:
+            lines[0].set_label(group_label)
+            
     ax.grid(True)
     return fig, ax
 
@@ -163,7 +155,6 @@ def upload_page():
 def job_page(job_id):
     job_dir = os.path.join(app.config['UPLOAD_FOLDER'], job_id)
     if not os.path.isdir(job_dir): abort(404, "Job not found.")
-    
     filenames = sorted([f for f in os.listdir(job_dir) if os.path.isfile(os.path.join(job_dir, f))])
     if not filenames: abort(404, "No files in this job.")
 
@@ -177,10 +168,8 @@ def job_page(job_id):
         first_file_path = os.path.join(job_dir, filenames[0])
         file_info = parse_file(first_file_path)
         if file_info["error"]: raise ValueError(file_info["error"])
-        
         context["settings"] = file_info["settings"]
         header_row = file_info["header_row"]
-        
         df_template = pd.read_csv(first_file_path, skiprows=header_row, low_memory=False)
         context["headers"] = df_template.columns.str.strip().tolist()
 
@@ -193,16 +182,13 @@ def job_page(job_id):
             context["num_plots"] = num_plots
             x_col = request.form.get('x_col', '').strip()
             if not x_col: raise ValueError("Global X-Column is required.")
-
             curves_to_plot_str = request.form.get('curves_to_plot', '').strip()
             curves_to_plot = [int(i.strip()) for i in curves_to_plot_str.split(',')] if curves_to_plot_str else None
             
             use_col_as_label = request.form.get('use_col_as_label') == 'on'
             label_source_col = request.form.get('label_source_col') if use_col_as_label else None
-            
             curve_labels_str = request.form.get('curve_labels', '').strip()
             curve_labels = [s.strip() for s in curve_labels_str.split(',')] if curve_labels_str else []
-            
             labels_dict = {}
             if not label_source_col:
                 if curves_to_plot and len(curves_to_plot) == len(curve_labels):
@@ -222,7 +208,6 @@ def job_page(job_id):
                         y_columns_details.append({"name": y_col, "style": style})
 
                 if not y_columns_details and not (numerator and denominator): continue
-
                 fig, ax = plt.subplots(figsize=(12, 8))
                 final_ylabel = ""
                 
@@ -240,7 +225,6 @@ def job_page(job_id):
                         
                         num_curves = request.form.get(f'num_curves_{file_idx}', type=int)
                         if not num_curves: raise ValueError(f"'Total # of Curves' is required for {filename}.")
-                        
                         df = pd.read_csv(os.path.join(job_dir, filename), skiprows=header_row, low_memory=False)
                         df.columns = df.columns.str.strip()
                         label_col_data = df[label_source_col].copy() if label_source_col and label_source_col in df else None
@@ -260,6 +244,7 @@ def job_page(job_id):
                                     df_numeric[scale_col] *= float(scale_factor_str)
                         
                         file_alias = request.form.get(f'file_alias_{file_idx}', '').strip() or os.path.splitext(filename)[0]
+                        group_label = f"{y_col_to_plot} ({file_alias})"
                         
                         plot_segmented_curves(
                             df=df_numeric, x_col=x_col, y_col=y_col_to_plot, num_curves=num_curves, ax=ax,
@@ -272,7 +257,6 @@ def job_page(job_id):
                 final_ylabel = str(final_ylabel)
                 auto_title = f'Plot of {final_ylabel} vs {final_xlabel}'
                 final_title = str(request.form.get(f'title_{i}', '').strip() or auto_title)
-                
                 ax.set_title(final_title); ax.set_xlabel(final_xlabel); ax.set_ylabel(final_ylabel)
                 if request.form.get(f'legend_{i}') == 'on': ax.legend()
                 if request.form.get('x_log') == 'on': ax.set_xscale('log')
@@ -281,8 +265,9 @@ def job_page(job_id):
                 ax.set_xlim(left=to_float(request.form.get('x_min')), right=to_float(request.form.get('x_max')))
                 ax.set_ylim(bottom=to_float(request.form.get(f'y_min_{i}')), top=to_float(request.form.get(f'y_max_{i}')))
                 
+                # --- CHANGE IS HERE: Added dpi=300 ---
                 img = io.BytesIO()
-                fig.savefig(img, format='png', bbox_inches='tight')
+                fig.savefig(img, format='png', bbox_inches='tight', dpi=300)
                 img.seek(0)
                 context["plot_urls"].append(base64.b64encode(img.getvalue()).decode('utf8'))
                 plt.close(fig)
