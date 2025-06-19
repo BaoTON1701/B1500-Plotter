@@ -75,7 +75,7 @@
                     </div>
                     
                     <h3>Legend & Label Settings</h3>
-                    <div class="grid-container" style="grid-template-columns: 1fr 1fr; margin-top: 1.5rem;">
+                    <div class="grid-container" style="grid-template-columns: 1fr 1fr; margin-top: 1rem;">
                         <div class="form-group"><label for="curves_to_plot">Curves to Plot (indices)</label><input type="text" id="curves_to_plot" name="curves_to_plot" placeholder="e.g., 0, 2, 5" value="{{ form_data.get('curves_to_plot', '') }}"></div>
                         <div class="form-group"><label for="curve_labels">Manual Curve Aliases (in order)</label><input type="text" id="curve_labels" name="curve_labels" placeholder="e.g., 1uA, 3uA, 6uA" value="{{ form_data.get('curve_labels', '') }}"></div>
                     </div>
@@ -107,18 +107,25 @@
                         <div class="form-group"><label for="numerator_{{i}}">Numerator (Y1)</label><select name="numerator_{{i}}"><option value="">-- Select --</option>{% for h in headers %}<option value="{{h}}" {% if form_data.get('numerator_' ~ i) == h %}selected{% endif %}>{{h}}</option>{% endfor %}</select></div>
                         <div class="form-group"><label for="denominator_{{i}}">Denominator (Y2)</label><select name="denominator_{{i}}"><option value="">-- Select --</option>{% for h in headers %}<option value="{{h}}" {% if form_data.get('denominator_' ~ i) == h %}selected{% endif %}>{{h}}</option>{% endfor %}</select></div>
                     </div>
+                    <div class="calc-grid" style="border-top: 2px dashed #28a745;">
+                        <h4 style="grid-column: 1 / -1;">Or, Plot a Derivative (dY/dX)</h4>
+                        <div class="form-group"><label for="deriv_y_{{i}}">Differentiate (Y)</label><select name="deriv_y_{{i}}"><option value="">-- Select --</option>{% for h in headers %}<option value="{{h}}" {% if form_data.get('deriv_y_' ~ i) == h %}selected{% endif %}>{{h}}</option>{% endfor %}</select></div>
+                        <div class="form-group"><label for="deriv_x_{{i}}">With Respect to (X)</label><select name="deriv_x_{{i}}"><option value="">-- Select --</option>{% for h in headers %}<option value="{{h}}" {% if form_data.get('deriv_x_' ~ i) == h %}selected{% endif %}>{{h}}</option>{% endfor %}</select></div>
+                        <div class="form-group"><label for="deriv_period_{{i}}">Derivative Period (points)</label><input type="number" id="deriv_period_{{i}}" name="deriv_period_{{i}}" min="1" value="{{ form_data.get('deriv_period_' ~ i, '1') }}"></div>
+                    </div>
                     {% endfor %}
 
                     <div style="text-align: center; margin-top: 2rem;"><button type="submit" id="generate-btn" class="btn btn-success">Generate Plot(s)</button></div>
                 
-                {% else %}
-                    <form method="get">
-                        <h2>Create Plots</h2>
-                        <div class="form-group"><label for="num_plots">How many separate plots do you want to create?</label><input type="number" id="num_plots" name="num_plots" min="1" max="5" value="1" required></div>
-                        <div style="margin-top: 1rem;"><button type="submit" class="btn">Continue</button></div>
-                    </form>
-                {% endif %}
-            </form>
+                </form>
+
+            {% else %}
+                <form method="get">
+                    <h2>Create Plots</h2>
+                    <div class="form-group"><label for="num_plots">How many separate plots do you want to create?</label><input type="number" id="num_plots" name="num_plots" min="1" max="5" value="1" required></div>
+                    <div style="margin-top: 1rem;"><button type="submit" class="btn">Continue</button></div>
+                </form>
+            {% endif %}
         </div>
         <div class="output-panel">
             {% if not plot_urls and not error and num_plots %}<div class="alert alert-info"><h2>Ready to Plot</h2><p>Fill out the configuration on the left and click "Generate Plot(s)".</p></div>{% endif %}
