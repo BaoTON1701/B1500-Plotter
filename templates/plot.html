@@ -6,12 +6,12 @@
     <title>Configure Comparative Plots</title>
     <style>
         :root { --panel-gap: 1.5rem; --control-panel-width: 600px; }
-        html, body { height: 100%; margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; background-color: #f4f7f6; }
-        .main-layout { display: flex; height: 100vh; gap: var(--panel-gap); padding: var(--panel-gap); }
+        html, body { height: 100%; margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: #f4f7f6; }
+        .main-layout { display: flex; height: 100vh; gap: var(--panel-gap); padding: var(--panel-gap); box-sizing: border-box; }
         .controls-panel, .output-panel { background-color: #fff; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); overflow-y: auto; padding: 2rem; }
         .controls-panel { flex: 0 0 var(--control-panel-width); }
         .output-panel { flex: 1; text-align: center; }
-        h1, h2, h3, h4 { color: #1a1a1a; }
+        h1, h2, h3, h4, h5 { color: #1a1a1a; }
         h2 { border-bottom: 2px solid #007bff; padding-bottom: 0.5rem; margin-top: 2rem; }
         h3 { border-bottom: 1px solid #ccc; padding-bottom: 0.5rem; margin-top: 2rem; }
         h4 { margin-top: 1.5rem; margin-bottom: 0.5rem; color: #0056b3; }
@@ -21,6 +21,7 @@
         .calc-grid { border-top: 2px dashed #007bff; padding-top: 1rem; margin-top: 1rem; }
         .form-group { display: flex; flex-direction: column; }
         label { font-weight: bold; margin-bottom: 0.5rem; font-size: 0.9em; }
+        label.required::after { content: " *"; color: red; }
         input[type="text"], input[type="number"], select { padding: 0.75rem; border: 1px solid #ccc; border-radius: 4px; font-size: 1rem; width: 100%; box-sizing: border-box;}
         .checkbox-group { display: flex; align-items: center; gap: 0.5rem; margin-top: 0.5rem; }
         .btn { display: inline-block; background-color: #007bff; color: white; padding: 0.75rem 1.5rem; border: none; border-radius: 4px; font-size: 1rem; cursor: pointer; text-decoration: none; text-align: center; }
@@ -40,28 +41,46 @@
             
             {% if error %} <div class="alert alert-danger">{{ error }}</div> {% endif %}
 
-            <form method="post" onsubmit="document.getElementById('generate-btn').disabled=true; document.getElementById('generate-btn').innerText='Generating...'">
+            {% if not num_plots %}
                 <div class="info-box">
-                    <h4>Files to Include in Plots</h4>
-                    {% for filename in filenames %}
-                    <div class="checkbox-group">
-                        <input type="checkbox" name="files_to_plot" value="{{ filename }}" id="file_{{loop.index0}}" checked>
-                        <label for="file_{{loop.index0}}" style="font-weight:normal;">{{ filename }}</label>
-                    </div>
-                    {% endfor %}
-                    {% if headers %}<h5 style="margin-top: 1rem; margin-bottom: 0.5rem;">Available Data Columns</h5>
-                    <p style="font-size:0.8em; margin:0; line-height: 1.4;">{{ headers|join(', ') }}</p>{% endif %}
+                    <h4>Uploaded Files</h4>
+                    <ul>{% for f in filenames %}<li>{{ f }}</li>{% endfor %}</ul>
                 </div>
-
-                {% if num_plots %}
+                <form method="get">
+                    <h2 style="margin-top:2rem; border:none;">Create Plots</h2>
+                    <div class="form-group">
+                        <label for="num_plots" class="required">How many separate plots do you want to create?</label>
+                        <input type="number" id="num_plots" name="num_plots" min="1" max="5" value="1" required>
+                    </div>
+                    <div style="margin-top: 1rem;"><button type="submit" class="btn">Continue</button></div>
+                </form>
+            {% else %}
+                <form method="post" onsubmit="document.getElementById('generate-btn').disabled=true; document.getElementById('generate-btn').innerText='Generating...'">
                     <input type="hidden" name="num_plots" value="{{ num_plots }}">
                     
+                    <div class="info-box">
+                        <h4>Files to Include in Plots</h4>
+                        {% for filename in filenames %}
+                        <div class="checkbox-group">
+                            <input type="checkbox" name="files_to_plot" value="{{ filename }}" id="file_{{loop.index0}}" checked>
+                            <label for="file_{{loop.index0}}" style="font-weight:normal;">{{ filename }}</label>
+                        </div>
+                        {% endfor %}
+                        {% if settings %}
+                        <h5 style="margin-top: 1rem; margin-bottom: 0.5rem;">File Information (from first file)</h5>
+                        <dl class="grid-container" style="font-size:0.9em; grid-template-columns: auto 1fr;">
+                            {% for key, value in settings.items() %}<dt style="font-weight:bold;">{{ key }}</dt><dd style="margin:0;font-family:monospace;word-break:break-all;">{{ value }}</dd>{% endfor %}
+                        </dl>
+                        {% endif %}
+                        {% if headers %}<h5 style="margin-top: 1rem; margin-bottom: 0.5rem;">Available Data Columns</h5><p style="font-size:0.8em; margin:0; line-height: 1.4;">{{ headers|join(', ') }}</p>{% endif %}
+                    </div>
+
                     <h2>File Settings</h2>
                     {% for filename in filenames %}
                     <div class="file-settings-block">
                         <p style="font-weight: bold; margin: 0 0 1rem 0;">{{ filename }}</p>
                         <div class="grid-container">
-                            <div class="form-group"><label for="num_curves_{{loop.index0}}">Total # of Curves</label><input type="number" id="num_curves_{{loop.index0}}" name="num_curves_{{loop.index0}}" min="1" value="{{ form_data.get('num_curves_' ~ loop.index0, '') }}" required></div>
+                            <div class="form-group"><label for="num_curves_{{loop.index0}}" class="required">Total # of Curves</label><input type="number" id="num_curves_{{loop.index0}}" name="num_curves_{{loop.index0}}" min="1" value="{{ form_data.get('num_curves_' ~ loop.index0, '') }}" required></div>
                             <div class="form-group"><label for="file_alias_{{loop.index0}}">Legend Alias for File</label><input type="text" id="file_alias_{{loop.index0}}" name="file_alias_{{loop.index0}}" placeholder="e.g., 300K" value="{{ form_data.get('file_alias_' ~ loop.index0, '') }}"></div>
                         </div>
                     </div>
@@ -69,16 +88,13 @@
                     
                     <h2>Global Settings</h2>
                     <div class="grid-container">
-                        <div class="form-group"><label for="x_col">X-Axis Column</label><select id="x_col" name="x_col" required>{% for h in headers %}<option value="{{h}}" {% if form_data.get('x_col') == h %}selected{% endif %}>{{h}}</option>{% endfor %}</select></div>
-                        <div class="form-group"><label for="xlabel">X-Axis Label (optional)</label><input type="text" id="xlabel" name="xlabel" placeholder="Defaults to X-column" value="{{ form_data.get('xlabel', '') }}"></div>
+                        <div class="form-group"><label for="x_col" class="required">X-Axis Column</label><select id="x_col" name="x_col" required>{% for h in headers %}<option value="{{h}}" {% if form_data.get('x_col') == h %}selected{% endif %}>{{h}}</option>{% endfor %}</select></div>
+                        <div class="form-group"><label for="xlabel">X-Axis Label</label><input type="text" id="xlabel" name="xlabel" placeholder="Defaults to X-column" value="{{ form_data.get('xlabel', '') }}"></div>
                         <div class="form-group"><label>X-Axis Options</label><div class="checkbox-group"><input type="checkbox" id="x_log" name="x_log" {% if form_data.get('x_log') %}checked{% endif %}><label for="x_log" style="margin:0;">Log</label></div><div style="display:flex; gap: 0.5rem; margin-top: 0.5rem;"><input type="number" step="any" name="x_min" placeholder="Min" value="{{ form_data.get('x_min', '') }}"><input type="number" step="any" name="x_max" placeholder="Max" value="{{ form_data.get('x_max', '') }}"></div></div>
                     </div>
                     
                     <h3>Legend & Label Settings</h3>
-                    <div class="grid-container" style="grid-template-columns: 1fr 1fr; margin-top: 1rem;">
-                        <div class="form-group"><label for="curves_to_plot">Curves to Plot (indices)</label><input type="text" id="curves_to_plot" name="curves_to_plot" placeholder="e.g., 0, 2, 5" value="{{ form_data.get('curves_to_plot', '') }}"></div>
-                        <div class="form-group"><label for="curve_labels">Manual Curve Aliases (in order)</label><input type="text" id="curve_labels" name="curve_labels" placeholder="e.g., 1uA, 3uA, 6uA" value="{{ form_data.get('curve_labels', '') }}"></div>
-                    </div>
+                    <div class="grid-container" style="grid-template-columns: 1fr 1fr; margin-top: 1.5rem;"><div class="form-group"><label for="curves_to_plot">Curves to Plot (indices)</label><input type="text" id="curves_to_plot" name="curves_to_plot" placeholder="e.g., 0, 2, 5" value="{{ form_data.get('curves_to_plot', '') }}"></div><div class="form-group"><label for="curve_labels">Manual Curve Aliases (in order)</label><input type="text" id="curve_labels" name="curve_labels" placeholder="e.g., 1uA, 3uA, 6uA" value="{{ form_data.get('curve_labels', '') }}"></div></div>
                     <div class="form-group checkbox-group"><input type="checkbox" id="use_col_as_label" name="use_col_as_label" {% if form_data.get('use_col_as_label') %}checked{% endif %}><label for="use_col_as_label">Auto-generate labels from a data column</label></div>
                     <div class="form-group"><label for="label_source_col">Label Source Column</label><select id="label_source_col" name="label_source_col"><option value="">-- Select Column --</option>{% for h in headers %}<option value="{{h}}" {% if form_data.get('label_source_col') == h %}selected{% endif %}>{{h}}</option>{% endfor %}</select></div>
                     <div class="form-group checkbox-group"><input type="checkbox" id="prepend_y_col" name="prepend_y_col" {% if form_data.get('prepend_y_col', 'on') %}checked{% endif %}><label for="prepend_y_col">Prepend Y-Column name to legend labels (e.g., "IC: ...")</label></div>
@@ -95,37 +111,19 @@
                         {% endfor %}
                     </div>
                     <div class="grid-container">
-                        <div class="form-group"><label for="title_{{i}}">Plot Title (optional)</label><input type="text" id="title_{{i}}" name="title_{{i}}" placeholder="Defaults to 'Y vs X'" value="{{ form_data.get('title_' ~ i, '') }}"></div>
+                        <div class="form-group"><label for="title_{{i}}">Plot Title</label><input type="text" id="title_{{i}}" name="title_{{i}}" placeholder="Defaults to 'Y vs X'" value="{{ form_data.get('title_' ~ i, '') }}"></div>
                         <div class="form-group"><label for="ylabel_{{i}}">Y-Axis Label</label><input type="text" id="ylabel_{{i}}" name="ylabel_{{i}}" placeholder="Defaults to Y-columns" value="{{ form_data.get('ylabel_' ~ i, '') }}"></div>
                         <div class="form-group"><label>Y-Axis Options</label><div class="checkbox-group"><input type="checkbox" id="y_log_{{i}}" name="y_log_{{i}}" {% if form_data.get('y_log_' ~ i) %}checked{% endif %}><label for="y_log_{{i}}" style="margin:0;">Log</label></div><div class="checkbox-group" style="margin-top:0.25rem;"><input type="checkbox" id="legend_{{i}}" name="legend_{{i}}" {% if form_data.get('legend_' ~ i, 'on') %}checked{% endif %}><label for="legend_{{i}}" style="margin:0;">Legend</label></div></div>
                         <div class="form-group"><label>Y-Axis Limits</label><div style="display:flex; gap: 0.5rem;"><input type="number" step="any" name="y_min_{{i}}" placeholder="Min" value="{{ form_data.get('y_min_' ~ i, '') }}"><input type="number" step="any" name="y_max_{{i}}" placeholder="Max" value="{{ form_data.get('y_max_' ~ i, '') }}"></div></div>
-                        <div class="form-group"><label for="scale_col_{{i}}">Column to Scale</label><select id="scale_col_{{i}}" name="scale_col_{{i}}"><option value="">-- Select Column --</option>{% for h in headers %}<option value="{{h}}" {% if form_data.get('scale_col_' ~ i) == h %}selected{% endif %}>{{h}}</option>{% endfor %}</select></div>
+                        <div class="form-group"><label for="scale_col_{{i}}">Column to Scale</label><select id="scale_col_{{i}}" name="scale_col_{{i}}"><option value="">-- Select --</option>{% for h in headers %}<option value="{{h}}" {% if form_data.get('scale_col_' ~ i) == h %}selected{% endif %}>{{h}}</option>{% endfor %}</select></div>
                         <div class="form-group"><label for="scale_factor_{{i}}">Scaling Factor</label><input type="number" step="any" id="scale_factor_{{i}}" name="scale_factor_{{i}}" value="{{ form_data.get('scale_factor_' ~ i, '1.0') }}"></div>
                     </div>
-                    <div class="calc-grid">
-                        <h4 style="grid-column: 1 / -1;">Or, Plot a Calculation</h4>
-                        <div class="form-group"><label for="numerator_{{i}}">Numerator (Y1)</label><select name="numerator_{{i}}"><option value="">-- Select --</option>{% for h in headers %}<option value="{{h}}" {% if form_data.get('numerator_' ~ i) == h %}selected{% endif %}>{{h}}</option>{% endfor %}</select></div>
-                        <div class="form-group"><label for="denominator_{{i}}">Denominator (Y2)</label><select name="denominator_{{i}}"><option value="">-- Select --</option>{% for h in headers %}<option value="{{h}}" {% if form_data.get('denominator_' ~ i) == h %}selected{% endif %}>{{h}}</option>{% endfor %}</select></div>
-                    </div>
-                    <div class="calc-grid" style="border-top: 2px dashed #28a745;">
-                        <h4 style="grid-column: 1 / -1;">Or, Plot a Derivative (dY/dX)</h4>
-                        <div class="form-group"><label for="deriv_y_{{i}}">Differentiate (Y)</label><select name="deriv_y_{{i}}"><option value="">-- Select --</option>{% for h in headers %}<option value="{{h}}" {% if form_data.get('deriv_y_' ~ i) == h %}selected{% endif %}>{{h}}</option>{% endfor %}</select></div>
-                        <div class="form-group"><label for="deriv_x_{{i}}">With Respect to (X)</label><select name="deriv_x_{{i}}"><option value="">-- Select --</option>{% for h in headers %}<option value="{{h}}" {% if form_data.get('deriv_x_' ~ i) == h %}selected{% endif %}>{{h}}</option>{% endfor %}</select></div>
-                        <div class="form-group"><label for="deriv_period_{{i}}">Derivative Period (points)</label><input type="number" id="deriv_period_{{i}}" name="deriv_period_{{i}}" min="1" value="{{ form_data.get('deriv_period_' ~ i, '1') }}"></div>
-                    </div>
+                    <div class="calc-grid"><h4 style="grid-column: 1 / -1;">Or, Plot a Calculation</h4><div class="form-group"><label for="numerator_{{i}}">Numerator (Y1)</label><select name="numerator_{{i}}"><option value="">-- Select --</option>{% for h in headers %}<option value="{{h}}" {% if form_data.get('numerator_' ~ i) == h %}selected{% endif %}>{{h}}</option>{% endfor %}</select></div><div class="form-group"><label for="denominator_{{i}}">Denominator (Y2)</label><select name="denominator_{{i}}"><option value="">-- Select --</option>{% for h in headers %}<option value="{{h}}" {% if form_data.get('denominator_' ~ i) == h %}selected{% endif %}>{{h}}</option>{% endfor %}</select></div></div>
+                    <div class="calc-grid" style="border-top: 2px dashed #28a745;"><h4 style="grid-column: 1 / -1;">Or, Plot a Derivative (dY/dX)</h4><div class="form-group"><label for="deriv_y_{{i}}">Differentiate (Y)</label><select name="deriv_y_{{i}}"><option value="">-- Select --</option>{% for h in headers %}<option value="{{h}}" {% if form_data.get('deriv_y_' ~ i) == h %}selected{% endif %}>{{h}}</option>{% endfor %}</select></div><div class="form-group"><label for="deriv_x_{{i}}">With Respect to (X)</label><select name="deriv_x_{{i}}"><option value="">-- Select --</option>{% for h in headers %}<option value="{{h}}" {% if form_data.get('deriv_x_' ~ i) == h %}selected{% endif %}>{{h}}</option>{% endfor %}</select></div><div class="form-group"><label for="deriv_period_{{i}}">Derivative Period (points)</label><input type="number" id="deriv_period_{{i}}" name="deriv_period_{{i}}" min="1" value="{{ form_data.get('deriv_period_' ~ i, '1') }}"></div></div>
                     {% endfor %}
-
                     <div style="text-align: center; margin-top: 2rem;"><button type="submit" id="generate-btn" class="btn btn-success">Generate Plot(s)</button></div>
-                
-                </form>
-
-            {% else %}
-                <form method="get">
-                    <h2>Create Plots</h2>
-                    <div class="form-group"><label for="num_plots">How many separate plots do you want to create?</label><input type="number" id="num_plots" name="num_plots" min="1" max="5" value="1" required></div>
-                    <div style="margin-top: 1rem;"><button type="submit" class="btn">Continue</button></div>
-                </form>
-            {% endif %}
+                {% endif %}
+            </form>
         </div>
         <div class="output-panel">
             {% if not plot_urls and not error and num_plots %}<div class="alert alert-info"><h2>Ready to Plot</h2><p>Fill out the configuration on the left and click "Generate Plot(s)".</p></div>{% endif %}
